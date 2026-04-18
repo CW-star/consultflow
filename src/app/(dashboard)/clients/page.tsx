@@ -17,12 +17,19 @@ export default async function ClientsPage() {
 
   return (
     <div>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px'}}>
-        <div>
-          <h1 style={{fontSize:'24px',fontWeight:600}}>Clients</h1>
-          <p style={{color:'#6b7280',fontSize:'14px',marginTop:'4px'}}>{clients?.length ?? 0} active clients</p>
-        </div>
-      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+  <div>
+    <h1 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '4px' }}>Clients</h1>
+    <p style={{ color: '#6b7280', fontSize: '14px' }}>{clients?.length ?? 0} active clients</p>
+  </div>
+  <a href="/clients/new" style={{
+    background: '#1e40af', color: 'white', padding: '10px 20px',
+    borderRadius: '8px', fontSize: '14px', fontWeight: 500,
+    textDecoration: 'none', whiteSpace: 'nowrap',
+  }}>
+    + Add client
+  </a>
+</div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:'16px'}}>
         {clients?.map(client => {
