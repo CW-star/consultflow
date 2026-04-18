@@ -18,26 +18,29 @@ async function getData(id: string) {
     'Content-Type': 'application/json',
   }
 
-  const [invRes, sessRes, payRes] = await Promise.all([
+  const [invRes, sessRes, payRes, remRes] = await Promise.all([
     fetch(`${url}/rest/v1/invoices?id=eq.${id}&select=*,clients(*)`, { headers, cache: 'no-store' }),
     fetch(`${url}/rest/v1/sessions?invoice_id=eq.${id}&select=*&order=date.asc`, { headers, cache: 'no-store' }),
     fetch(`${url}/rest/v1/payments?invoice_id=eq.${id}&select=*&order=payment_date.desc`, { headers, cache: 'no-store' }),
+    fetch(`${url}/rest/v1/reminders?invoice_id=eq.${id}&select=*&order=scheduled_for.asc`, { headers, cache: 'no-store' }),
   ])
 
   const invoices = await invRes.json()
   const sessions = await sessRes.json()
   const payments = await payRes.json()
+  const reminders = await remRes.json()
 
   return {
     invoice: Array.isArray(invoices) ? invoices[0] : null,
     sessions: Array.isArray(sessions) ? sessions : [],
     payments: Array.isArray(payments) ? payments : [],
+    reminders: Array.isArray(reminders) ? reminders : [],
   }
 }
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { invoice, sessions: sess, payments: pays } = await getData(id)
+  const { invoice, sessions: sess, payments: pays, reminders: rems } = await getData(id)
 
   if (!invoice) return notFound()
 
@@ -55,6 +58,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div style={{ maxWidth: '720px' }}>
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
         <div>
@@ -159,7 +163,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
       {/* Payment history */}
       {pays.length > 0 && (
-        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' }}>
+        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px', marginBottom: '20px' }}>
           <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Payment history</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
             <thead>
@@ -181,6 +185,45 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           </table>
         </div>
       )}
+
+      {/* Reminder schedule */}
+      {rems.length > 0 && (
+        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Payment reminders</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {rems.map((r: any) => {
+              const remStatusColors: Record<string, { bg: string; color: string }> = {
+                scheduled: { bg: '#dbeafe', color: '#1d4ed8' },
+                sent: { bg: '#dcfce7', color: '#16a34a' },
+                failed: { bg: '#fee2e2', color: '#dc2626' },
+                cancelled: { bg: '#f3f4f6', color: '#6b7280' },
+              }
+              const rsc = remStatusColors[r.status] ?? remStatusColors.scheduled
+              const labels: Record<string, string> = {
+                day3: '3-day reminder',
+                day7: '7-day reminder',
+                day14: '14-day reminder',
+                day30: '30-day reminder',
+              }
+              const date = new Date(r.scheduled_for).toLocaleDateString('en-CA', {
+                month: 'short', day: 'numeric', year: 'numeric'
+              })
+              return (
+                <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f9fafb', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 500 }}>{labels[r.type] || r.type}</span>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}>Scheduled for {date}</span>
+                  </div>
+                  <span style={{ background: rsc.bg, color: rsc.color, padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 500, textTransform: 'capitalize' }}>
+                    {r.status}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
