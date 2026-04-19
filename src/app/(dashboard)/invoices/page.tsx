@@ -26,13 +26,26 @@ export default async function InvoicesPage() {
   const totalPaid = inv.reduce((s, i) => s + (i.paid_amount || 0), 0)
   const outstanding = totalAmount - totalPaid
   const overdueCount = inv.filter(i => i.status === 'overdue').length
+  const collectionRate = totalAmount > 0 ? ((totalPaid / totalAmount) * 100).toFixed(1) : '0'
 
   return (
     <div>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '4px' }}>Invoices</h1>
-          <p style={{ color: '#6b7280', fontSize: '14px' }}>{inv.length} invoices · {fmt(outstanding)} outstanding</p>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px' }}>Invoices</h1>
+          <p style={{ color: '#6b7280', fontSize: '14px' }}>{inv.length} invoices · {fmt(outstanding)} outstanding · {collectionRate}% collected</p>
+        </div>
+        {/* Export buttons — always visible */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <a href="/api/invoices/export?format=csv"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', fontWeight: 500, color: '#374151', textDecoration: 'none' }}>
+            📊 Export CSV
+          </a>
+          <a href="/api/invoices/export?format=pdf" target="_blank"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', fontWeight: 500, color: '#374151', textDecoration: 'none' }}>
+            📄 PDF Report
+          </a>
         </div>
       </div>
 
@@ -46,7 +59,7 @@ export default async function InvoicesPage() {
         ].map(s => (
           <div key={s.label} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px' }}>
             <p style={{ fontSize: '11px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>{s.label}</p>
-            <p style={{ fontSize: '22px', fontWeight: 600, color: s.color }}>{s.value}</p>
+            <p style={{ fontSize: '22px', fontWeight: 700, color: s.color }}>{s.value}</p>
           </div>
         ))}
       </div>
@@ -56,7 +69,7 @@ export default async function InvoicesPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
-              {['Invoice #', 'Client', 'Issued', 'Due', 'Amount', 'Paid', 'Status'].map(h => (
+              {['Invoice #', 'Client', 'Issued', 'Due', 'Amount', 'Paid', 'Status', ''].map(h => (
                 <th key={h} style={{ textAlign: h === 'Amount' || h === 'Paid' ? 'right' : 'left', padding: '12px 16px', color: '#6b7280', fontWeight: 500, fontSize: '12px', textTransform: 'uppercase' }}>{h}</th>
               ))}
             </tr>
@@ -65,19 +78,31 @@ export default async function InvoicesPage() {
             {inv.map((invoice: any) => (
               <tr key={invoice.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                 <td style={{ padding: '14px 16px' }}>
-                  <Link href={`/invoices/${invoice.id}`} style={{ color: '#1e40af', fontWeight: 500, textDecoration: 'none', fontFamily: 'monospace' }}>
+                  <Link href={`/invoices/${invoice.id}`} style={{ color: '#1e40af', fontWeight: 600, textDecoration: 'none', fontFamily: 'monospace', fontSize: '13px' }}>
                     {invoice.invoice_number}
                   </Link>
                 </td>
                 <td style={{ padding: '14px 16px', fontWeight: 500 }}>{invoice.clients?.name}</td>
-                <td style={{ padding: '14px 16px', color: '#6b7280' }}>{invoice.issue_date}</td>
-                <td style={{ padding: '14px 16px', color: '#6b7280' }}>{invoice.due_date}</td>
-                <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 500 }}>{fmt(invoice.total_amount, invoice.clients?.currency)}</td>
+                <td style={{ padding: '14px 16px', color: '#6b7280', fontSize: '13px' }}>{invoice.issue_date}</td>
+                <td style={{ padding: '14px 16px', color: '#6b7280', fontSize: '13px' }}>{invoice.due_date}</td>
+                <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 600 }}>{fmt(invoice.total_amount, invoice.clients?.currency)}</td>
                 <td style={{ padding: '14px 16px', textAlign: 'right', color: '#16a34a' }}>{fmt(invoice.paid_amount, invoice.clients?.currency)}</td>
                 <td style={{ padding: '14px 16px' }}>
-                  <span style={{ background: statusColors[invoice.status] + '20', color: statusColors[invoice.status], padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 500, textTransform: 'capitalize' }}>
+                  <span style={{ background: statusColors[invoice.status] + '20', color: statusColors[invoice.status], padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, textTransform: 'capitalize' }}>
                     {invoice.status}
                   </span>
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <a href={`/api/invoices/pdf?id=${invoice.id}`} target="_blank"
+                      style={{ padding: '4px 10px', background: '#f3f4f6', borderRadius: '6px', fontSize: '12px', color: '#374151', textDecoration: 'none', fontWeight: 500 }}>
+                      ↓ PDF
+                    </a>
+                    <Link href={`/invoices/${invoice.id}`}
+                      style={{ padding: '4px 10px', background: '#eff6ff', borderRadius: '6px', fontSize: '12px', color: '#1e40af', textDecoration: 'none', fontWeight: 500 }}>
+                      View →
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}
