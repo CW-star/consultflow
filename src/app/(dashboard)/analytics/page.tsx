@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic'
-import Link from 'next/link'
+import ExportPreview from './ExportPreview'
 
 async function getData() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -10,11 +10,12 @@ async function getData() {
     'Content-Type': 'application/json',
   }
 
-  const [invRes, sessRes, clientRes, payRes] = await Promise.all([
+  const [invRes, sessRes, clientRes, payRes, settingsRes] = await Promise.all([
     fetch(`${url}/rest/v1/invoices?select=*,clients(name,currency)&order=issue_date.asc`, { headers, cache: 'no-store' }),
     fetch(`${url}/rest/v1/sessions?select=*,clients(name)&order=date.asc`, { headers, cache: 'no-store' }),
     fetch(`${url}/rest/v1/clients?select=*`, { headers, cache: 'no-store' }),
     fetch(`${url}/rest/v1/payments?select=*&order=payment_date.asc`, { headers, cache: 'no-store' }),
+    fetch(`${url}/rest/v1/settings?select=*&limit=1`, { headers, cache: 'no-store' }),
   ])
 
   return {
@@ -22,11 +23,13 @@ async function getData() {
     sessions: await sessRes.json(),
     clients: await clientRes.json(),
     payments: await payRes.json(),
+    settings: await settingsRes.json(),
   }
 }
 
 export default async function AnalyticsPage() {
-  const { invoices: inv, sessions: sess, clients, payments } = await getData()
+  const { invoices: inv, sessions: sess, clients, payments, settings } = await getData()
+  const company = settings[0] || {}
 
   const fmt = (n: number) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(n)
   const today = new Date()
@@ -100,9 +103,8 @@ export default async function AnalyticsPage() {
       }, 0) / paidInvoices.length)
     : 0
 
-  // Best and worst months
+  // Best month
   const bestMonth = monthlyData.reduce((best: any, m: any) => m.billed > (best?.billed || 0) ? m : best, null)
-  const worstMonth = monthlyData.filter((m: any) => m.billed > 0).reduce((worst: any, m: any) => m.billed < (worst?.billed || Infinity) ? m : worst, null)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -113,16 +115,7 @@ export default async function AnalyticsPage() {
           <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px' }}>Analytics</h1>
           <p style={{ color: '#6b7280', fontSize: '14px' }}>Business intelligence & revenue insights</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <a href="/api/invoices/export?format=csv"
-            style={{ padding: '8px 14px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', fontWeight: 500, color: '#374151', textDecoration: 'none' }}>
-            📊 Export CSV
-          </a>
-          <a href="/api/invoices/export?format=pdf" target="_blank"
-            style={{ padding: '8px 14px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '13px', fontWeight: 500, color: '#374151', textDecoration: 'none' }}>
-            📄 PDF Report
-          </a>
-        </div>
+        <ExportPreview invoices={inv} company={company} />
       </div>
 
       {/* KPI cards */}
@@ -130,7 +123,7 @@ export default async function AnalyticsPage() {
         {[
           { label: 'Total billed', value: fmt(totalBilled), sub: `${inv.length} invoices`, color: '#1e40af' },
           { label: 'Total collected', value: fmt(totalPaid), sub: `${paidCount} paid`, color: '#16a34a' },
-          { label: 'Collection rate', value: `${collectionRate}%`, sub: collectionRate >= '90' ? '🟢 Excellent' : collectionRate >= '75' ? '🟡 Good' : '🔴 Low', color: Number(collectionRate) >= 90 ? '#16a34a' : Number(collectionRate) >= 75 ? '#d97706' : '#dc2626' },
+          { label: 'Collection rate', value: `${collectionRate}%`, sub: Number(collectionRate) >= 90 ? '🟢 Excellent' : Number(collectionRate) >= 75 ? '🟡 Good' : '🔴 Low', color: Number(collectionRate) >= 90 ? '#16a34a' : Number(collectionRate) >= 75 ? '#d97706' : '#dc2626' },
           { label: 'Avg days to pay', value: avgDaysToPay > 0 ? `${avgDaysToPay}d` : '—', sub: avgDaysToPay <= 14 ? 'Fast payer' : avgDaysToPay <= 30 ? 'Average' : 'Slow payer', color: avgDaysToPay <= 14 ? '#16a34a' : avgDaysToPay <= 30 ? '#d97706' : '#dc2626' },
         ].map(s => (
           <div key={s.label} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
@@ -143,8 +136,6 @@ export default async function AnalyticsPage() {
 
       {/* Revenue trend chart + Insights */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
-
-        {/* Bar chart */}
         <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h2 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>Revenue trend — last 6 months</h2>
@@ -173,7 +164,6 @@ export default async function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Insights panel */}
         <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px' }}>Key insights</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -205,7 +195,7 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
-      {/* AI Forecast — 3/6/12 months */}
+      {/* AI Forecast */}
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
@@ -238,9 +228,8 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Invoice status breakdown */}
+      {/* Invoice status + Payment cycle */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-
         <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '20px' }}>Invoice status breakdown</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -268,7 +257,6 @@ export default async function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Payment cycle */}
         <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '20px' }}>Payment cycle analysis</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -315,7 +303,7 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Monthly sessions trend */}
+      {/* Session volume by month */}
       <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '24px' }}>
         <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '20px' }}>Session volume by month</h2>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '120px' }}>
