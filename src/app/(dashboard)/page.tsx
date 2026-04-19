@@ -42,7 +42,7 @@ export default async function DashboardPage() {
   const unbilledValue = unbilledSessions.reduce((s: number, sess: any) => s + (sess.charge || 0), 0)
   const collectionRate = totalRevenue > 0 ? (totalCollected / totalRevenue) * 100 : 0
 
-  // Monthly target (set at $2000/month)
+  // Monthly target
   const MONTHLY_TARGET = 2000
   const currentMonth = today.getMonth()
   const currentYear = today.getFullYear()
@@ -96,22 +96,29 @@ export default async function DashboardPage() {
   if (belowTarget) nextActions.push({ type: 'warning', text: `${fmt(MONTHLY_TARGET - thisMonthRevenue)} below monthly target`, link: '/analytics' })
   if (nextActions.length === 0) nextActions.push({ type: 'success', text: 'All caught up! No urgent actions needed.', link: '/' })
 
-  // AI forecast (simple trend-based)
-  const last3Months = [0, 1, 2].map(i => {
-    const m = new Date(today.getFullYear(), today.getMonth() - i, 1)
-    return inv
-      .filter((inv: any) => {
-        const d = new Date(inv.issue_date)
-        return d.getMonth() === m.getMonth() && d.getFullYear() === m.getFullYear()
-      })
-      .reduce((s: number, inv: any) => s + (inv.total_amount || 0), 0)
-  }).reverse()
+  // AI forecast - find last 3 months with actual data
+  const monthlyRevenue: Record<string, number> = {}
+  inv.forEach((i: any) => {
+    const d = new Date(i.issue_date)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    monthlyRevenue[key] = (monthlyRevenue[key] || 0) + (i.total_amount || 0)
+  })
 
-  const avgMonthly = last3Months.reduce((a, b) => a + b, 0) / 3
-  const trend = last3Months[2] > last3Months[0] ? 'growing' : last3Months[2] < last3Months[0] ? 'declining' : 'stable'
-  const quarterForecast = avgMonthly * 3
+  const sortedMonths = Object.entries(monthlyRevenue)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+
+  const last3Months = sortedMonths.slice(-3).map(([key, val]) => ({
+    month: new Date(key + '-01').toLocaleDateString('en-CA', { month: 'short', year: '2-digit' }),
+    value: val,
+  }))
+
+  const avgMonthly = last3Months.reduce((a, b) => a + b.value, 0) / Math.max(last3Months.length, 1)
+  const trend = last3Months.length >= 2
+    ? last3Months[last3Months.length - 1].value > last3Months[0].value ? 'growing'
+    : last3Months[last3Months.length - 1].value < last3Months[0].value ? 'declining' : 'stable'
+    : 'stable'
   const trendMultiplier = trend === 'growing' ? 1.1 : trend === 'declining' ? 0.9 : 1
-  const adjustedForecast = quarterForecast * trendMultiplier
+  const adjustedForecast = avgMonthly * 3 * trendMultiplier
 
   // Recent sessions
   const recentSessions = sess.slice(0, 8)
@@ -132,11 +139,9 @@ export default async function DashboardPage() {
           <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0, color: '#111827' }}>Dashboard</h1>
           <p style={{ color: '#6b7280', fontSize: '14px', marginTop: '4px' }}>{dateStr}</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ background: healthBg, color: healthColor, padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 600 }}>
-            {healthScore >= 80 ? '✓' : healthScore >= 60 ? '⚠' : '!'} {healthLabel}
-          </span>
-        </div>
+        <span style={{ background: healthBg, color: healthColor, padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 600 }}>
+          {healthScore >= 80 ? '✓' : healthScore >= 60 ? '⚠' : '!'} {healthLabel}
+        </span>
       </div>
 
       {/* Key metrics */}
@@ -177,7 +182,6 @@ export default async function DashboardPage() {
             <div style={{
               width: `${targetProgress}%`, height: '8px', borderRadius: '999px',
               background: belowTarget ? '#dc2626' : '#16a34a',
-              transition: 'width 0.3s',
             }}/>
           </div>
           <p style={{ fontSize: '12px', color: '#9ca3af', margin: '8px 0 0' }}>{targetProgress.toFixed(0)}% of monthly target reached</p>
@@ -231,37 +235,64 @@ export default async function DashboardPage() {
 
         {/* AI Forecast */}
         <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: 0 }}>AI forecast — next quarter</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <p style={{ fontSize: '13px', fontWeight: 600, color: '#111827', margin: 0 }}>AI revenue forecast</p>
             <span style={{ background: '#ede9fe', color: '#7c3aed', padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600 }}>AI</span>
           </div>
-          <p style={{ fontSize: '28px', fontWeight: 700, color: '#1e40af', margin: '0 0 4px' }}>{fmt(adjustedForecast)}</p>
-          <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px' }}>
-            Based on {trend} trend · avg {fmt(avgMonthly)}/month
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+
+          {/* Past trend */}
+          <p style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Recent trend</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
             {last3Months.map((m, i) => {
-              const monthName = new Date(today.getFullYear(), today.getMonth() - 2 + i, 1)
-                .toLocaleDateString('en-CA', { month: 'short' })
-              const pct = avgMonthly > 0 ? (m / (avgMonthly * 1.5)) * 100 : 0
+              const pct = avgMonthly > 0 ? (m.value / (avgMonthly * 1.5)) * 100 : 0
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af', width: '28px' }}>{monthName}</span>
+                  <span style={{ fontSize: '11px', color: '#9ca3af', width: '44px' }}>{m.month}</span>
                   <div style={{ flex: 1, background: '#f3f4f6', borderRadius: '4px', height: '6px' }}>
                     <div style={{ width: `${Math.min(pct, 100)}%`, height: '6px', background: '#1e40af', borderRadius: '4px' }}/>
                   </div>
-                  <span style={{ fontSize: '11px', color: '#6b7280', width: '60px', textAlign: 'right' }}>{fmt(m)}</span>
+                  <span style={{ fontSize: '11px', color: '#6b7280', width: '70px', textAlign: 'right' }}>{fmt(m.value)}</span>
                 </div>
               )
             })}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '11px', color: '#7c3aed', width: '28px', fontWeight: 600 }}>Est</span>
-              <div style={{ flex: 1, background: '#ede9fe', borderRadius: '4px', height: '6px' }}>
-                <div style={{ width: `${Math.min((adjustedForecast / 3 / (avgMonthly * 1.5)) * 100, 100)}%`, height: '6px', background: '#7c3aed', borderRadius: '4px' }}/>
-              </div>
-              <span style={{ fontSize: '11px', color: '#7c3aed', width: '60px', textAlign: 'right', fontWeight: 600 }}>{fmt(adjustedForecast / 3)}/mo</span>
-            </div>
           </div>
+
+          {/* Future projections */}
+          <p style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>Projections</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {[
+              { label: '3 months', multiplier: 3, color: '#7c3aed', bg: '#ede9fe' },
+              { label: '6 months', multiplier: 6, color: '#2563eb', bg: '#dbeafe' },
+              { label: '12 months', multiplier: 12, color: '#16a34a', bg: '#dcfce7' },
+            ].map(({ label, multiplier, color, bg }) => {
+              const projected = avgMonthly * multiplier * trendMultiplier
+              const low = projected * 0.85
+              const high = projected * 1.15
+              return (
+                <div key={label} style={{ background: bg, borderRadius: '10px', padding: '12px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <p style={{ fontSize: '11px', color, fontWeight: 600, margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
+                      <p style={{ fontSize: '20px', fontWeight: 700, color, margin: 0 }}>{fmt(projected)}</p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '11px', color, margin: '0 0 2px', opacity: 0.7 }}>Range</p>
+                      <p style={{ fontSize: '12px', color, margin: 0, fontWeight: 500 }}>{fmt(low)} – {fmt(high)}</p>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '8px', background: 'rgba(255,255,255,0.5)', borderRadius: '4px', height: '4px' }}>
+                    <div style={{ width: `${Math.min((projected / (avgMonthly * multiplier * 1.3)) * 100, 100)}%`, height: '4px', background: color, borderRadius: '4px' }}/>
+                  </div>
+                  <p style={{ fontSize: '11px', color, margin: '6px 0 0', opacity: 0.8 }}>
+                    {fmt(avgMonthly * trendMultiplier)}/month avg · {trend} trend
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+          <p style={{ fontSize: '11px', color: '#9ca3af', margin: '12px 0 0', fontStyle: 'italic' }}>
+            * Based on last {last3Months.length} months of data. Range shows ±15% variance.
+          </p>
         </div>
       </div>
 
@@ -277,11 +308,13 @@ export default async function DashboardPage() {
           ].map(bucket => {
             const total = bucket.invoices.reduce((s: number, i: any) => s + ((i.total_amount || 0) - (i.paid_amount || 0)), 0)
             return (
-              <div key={bucket.label} style={{ background: bucket.bg, borderRadius: '10px', padding: '16px' }}>
-                <p style={{ fontSize: '11px', color: bucket.color, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>{bucket.label}</p>
-                <p style={{ fontSize: '20px', fontWeight: 700, color: bucket.color, margin: '0 0 2px' }}>{fmt(total)}</p>
-                <p style={{ fontSize: '12px', color: bucket.color, margin: 0, opacity: 0.8 }}>{bucket.invoices.length} invoice{bucket.invoices.length !== 1 ? 's' : ''}</p>
-              </div>
+              <a key={bucket.label} href="/invoices" style={{ textDecoration: 'none' }}>
+                <div style={{ background: bucket.bg, borderRadius: '10px', padding: '16px', cursor: 'pointer' }}>
+                  <p style={{ fontSize: '11px', color: bucket.color, fontWeight: 600, textTransform: 'uppercase', margin: '0 0 6px' }}>{bucket.label}</p>
+                  <p style={{ fontSize: '20px', fontWeight: 700, color: bucket.color, margin: '0 0 2px' }}>{fmt(total)}</p>
+                  <p style={{ fontSize: '12px', color: bucket.color, margin: 0, opacity: 0.8 }}>{bucket.invoices.length} invoice{bucket.invoices.length !== 1 ? 's' : ''}</p>
+                </div>
+              </a>
             )
           })}
         </div>
