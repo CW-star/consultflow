@@ -10,16 +10,18 @@ async function getData() {
     'Content-Type': 'application/json',
   }
 
-  const [invRes, sessRes, clientRes] = await Promise.all([
+  const [invRes, sessRes, clientRes, settingsRes] = await Promise.all([
     fetch(`${url}/rest/v1/invoices?select=*,clients(name,currency)`, { headers, cache: 'no-store' }),
     fetch(`${url}/rest/v1/sessions?select=*,clients(name)&order=date.desc`, { headers, cache: 'no-store' }),
     fetch(`${url}/rest/v1/clients?select=*`, { headers, cache: 'no-store' }),
+    fetch(`${url}/rest/v1/settings?select=*&limit=1`, { headers, cache: 'no-store' }),
   ])
 
   return {
     invoices: await invRes.json(),
     sessions: await sessRes.json(),
     clients: await clientRes.json(),
+    settings: await settingsRes.json(),
   }
 }
 
