@@ -17,6 +17,7 @@ const navItems = [
   { href: '/analytics', label: 'Analytics', icon: '◫', desc: 'Insights' },
   { href: '/automations', label: 'Automations', icon: '⚡', desc: 'Workflows' },
   { href: '/settings', label: 'Settings', icon: '◐', desc: 'Configuration' },
+  { href: '/help', label: 'Help', icon: '❓', desc: 'Help center' },
 ]
 
 const bottomNav = navItems.slice(0, 5)
