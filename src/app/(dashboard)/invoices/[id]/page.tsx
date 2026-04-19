@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 import { notFound } from 'next/navigation'
 import RecordPaymentButton from './RecordPaymentButton'
 import SendInvoiceButton from './SendInvoiceButton'
+import StatusDropdown from './StatusDropdown'
+import DownloadPDFButton from './DownloadPDFButton'
 
 const fmt = (n: number, currency = 'CAD') =>
   new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(n)
@@ -47,15 +49,6 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const client = invoice.clients
   const outstanding = invoice.total_amount - invoice.paid_amount
 
-  const statusColors: Record<string, { bg: string; color: string }> = {
-    paid: { bg: '#dcfce7', color: '#16a34a' },
-    sent: { bg: '#dbeafe', color: '#1d4ed8' },
-    overdue: { bg: '#fee2e2', color: '#dc2626' },
-    draft: { bg: '#f3f4f6', color: '#6b7280' },
-    partial: { bg: '#fef3c7', color: '#d97706' },
-  }
-  const sc = statusColors[invoice.status] ?? statusColors.draft
-
   return (
     <div style={{ maxWidth: '720px' }}>
 
@@ -66,15 +59,10 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           <h1 style={{ fontSize: '22px', fontWeight: 600, margin: 0 }}>{invoice.invoice_number}</h1>
           <p style={{ color: '#6b7280', fontSize: '14px', marginTop: '4px' }}>{client?.name}</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <span style={{ background: sc.bg, color: sc.color, padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 500, textTransform: 'capitalize' }}>
-            {invoice.status}
-          </span>
-          <SendInvoiceButton
-            invoiceId={id}
-            clientEmail={client?.email ?? null}
-            status={invoice.status}
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <DownloadPDFButton invoiceId={id} invoiceNumber={invoice.invoice_number}/>
+          <SendInvoiceButton invoiceId={id} clientEmail={client?.email ?? null} status={invoice.status}/>
+          <StatusDropdown invoiceId={id} currentStatus={invoice.status}/>
         </div>
       </div>
 
