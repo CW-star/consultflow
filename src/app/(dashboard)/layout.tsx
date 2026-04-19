@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
@@ -17,10 +17,199 @@ const navItems = [
   { href: '/analytics', label: 'Analytics', icon: '◫', desc: 'Insights' },
   { href: '/automations', label: 'Automations', icon: '⚡', desc: 'Workflows' },
   { href: '/settings', label: 'Settings', icon: '◐', desc: 'Configuration' },
-  { href: '/help', label: 'Help', icon: '❓', desc: 'Help center' },
+  { href: '/help', label: 'Help', icon: '?', desc: 'Help center' },
 ]
 
 const bottomNav = navItems.slice(0, 5)
+
+interface Notification {
+  id: string
+  type: 'overdue' | 'payment' | 'inactive' | 'unbilled'
+  title: string
+  message: string
+  link: string
+  time: string
+  read: boolean
+}
+
+function NotificationBell() {
+  const [open, setOpen] = useState(false)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadNotifications()
+  }, [])
+
+  async function loadNotifications() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    const headers = { 'apikey': key, 'Authorization': `Bearer ${key}` }
+
+    const [invRes, sessRes, clientRes] = await Promise.all([
+      fetch(`${url}/rest/v1/invoices?select=*,clients(name)&status=eq.overdue`, { headers }),
+      fetch(`${url}/rest/v1/sessions?select=*,clients(name)&is_invoiced=eq.false`, { headers }),
+      fetch(`${url}/rest/v1/clients?select=*`, { headers }),
+    ])
+
+    const overdueInv = await invRes.json()
+    const unbilledSess = await sessRes.json()
+    const clients = await clientRes.json()
+    const notifs: Notification[] = []
+
+    // Overdue invoices
+    overdueInv.slice(0, 3).forEach((inv: any) => {
+      notifs.push({
+        id: `overdue-${inv.id}`,
+        type: 'overdue',
+        title: 'Overdue invoice',
+        message: `${inv.invoice_number} for ${inv.clients?.name} is overdue`,
+        link: `/invoices/${inv.id}`,
+        time: inv.due_date,
+        read: false,
+      })
+    })
+
+    // Unbilled sessions
+    if (unbilledSess.length > 0) {
+      const total = unbilledSess.reduce((s: number, sess: any) => s + (sess.charge || 0), 0)
+      notifs.push({
+        id: 'unbilled',
+        type: 'unbilled',
+        title: 'Unbilled work',
+        message: `${unbilledSess.length} sessions worth $${total.toFixed(2)} not yet invoiced`,
+        link: '/sessions',
+        time: 'Now',
+        read: false,
+      })
+    }
+
+    // Inactive clients (60+ days)
+    const inactiveClients = clients.filter((c: any) => {
+      // Flag if client ID not in recent sessions
+      return true // simplified — full logic in client detail
+    }).slice(0, 2)
+
+    setNotifications(notifs)
+    setLoading(false)
+  }
+
+  function markAllRead() {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  }
+
+  const unread = notifications.filter(n => !n.read).length
+
+  const typeConfig = {
+    overdue: { icon: '⚠️', color: 'var(--danger)', bg: 'var(--danger-light)' },
+    payment: { icon: '✅', color: 'var(--success)', bg: 'var(--success-light)' },
+    inactive: { icon: '💬', color: 'var(--warning)', bg: 'var(--warning-light)' },
+    unbilled: { icon: '📋', color: 'var(--purple)', bg: 'var(--purple-light)' },
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(!open)} style={{
+        position: 'relative', width: '36px', height: '36px',
+        borderRadius: '10px', background: 'var(--gray-100)',
+        border: '1px solid var(--border)', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '16px', transition: 'all 0.15s',
+      }}>
+        🔔
+        {unread > 0 && (
+          <span style={{
+            position: 'absolute', top: '-4px', right: '-4px',
+            background: 'var(--danger)', color: 'white',
+            borderRadius: 'var(--radius-full)', fontSize: '9px',
+            fontWeight: 800, minWidth: '16px', height: '16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 4px', border: '2px solid white',
+          }}>
+            {unread}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setOpen(false)}/>
+          <div style={{
+            position: 'absolute', right: 0, top: '44px',
+            background: 'white', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)', width: '340px',
+            zIndex: 50, boxShadow: 'var(--shadow-md)',
+            overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--gray-50)' }}>
+              <div>
+                <p style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 1px', color: 'var(--gray-900)' }}>Notifications</p>
+                <p style={{ fontSize: '12px', color: 'var(--gray-400)', margin: 0 }}>{unread} unread</p>
+              </div>
+              {unread > 0 && (
+                <button onClick={markAllRead} style={{
+                  background: 'none', border: 'none', fontSize: '12px',
+                  color: 'var(--primary)', cursor: 'pointer',
+                  fontFamily: 'var(--font)', fontWeight: 600,
+                }}>
+                  Mark all read
+                </button>
+              )}
+            </div>
+
+            {/* Notifications list */}
+            <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
+              {loading ? (
+                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--gray-400)', fontSize: '13px' }}>Loading...</div>
+              ) : notifications.length === 0 ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+                  <p style={{ fontSize: '28px', marginBottom: '8px' }}>🎉</p>
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--gray-700)', marginBottom: '4px' }}>All caught up!</p>
+                  <p style={{ fontSize: '13px', color: 'var(--gray-400)', margin: 0 }}>No new notifications</p>
+                </div>
+              ) : (
+                notifications.map(n => {
+                  const config = typeConfig[n.type]
+                  return (
+                    <Link key={n.id} href={n.link} onClick={() => {
+                      setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, read: true } : notif))
+                      setOpen(false)
+                    }} style={{
+                      display: 'flex', gap: '12px', padding: '13px 16px',
+                      borderBottom: '1px solid var(--border-light)',
+                      textDecoration: 'none', background: n.read ? 'white' : 'var(--primary-light)',
+                      transition: 'background 0.15s',
+                    }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: config.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '16px' }}>
+                        {config.icon}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '3px' }}>
+                          <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--gray-900)', margin: 0 }}>{n.title}</p>
+                          {!n.read && <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: '4px' }}/>}
+                        </div>
+                        <p style={{ fontSize: '12px', color: 'var(--gray-500)', margin: '0 0 4px', lineHeight: 1.4 }}>{n.message}</p>
+                        <p style={{ fontSize: '11px', color: 'var(--gray-300)', margin: 0, fontFamily: 'var(--font-mono)' }}>{n.time}</p>
+                      </div>
+                    </Link>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', background: 'var(--gray-50)' }}>
+              <Link href="/automations" onClick={() => setOpen(false)} style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                View all automations →
+              </Link>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 function ProfileMenu() {
   const [open, setOpen] = useState(false)
@@ -73,6 +262,14 @@ function ProfileMenu() {
               textDecoration: 'none', fontWeight: 500,
             }}>
               ⚡ Automations
+            </Link>
+            <Link href="/help" onClick={() => setOpen(false)} style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '8px 12px', borderRadius: 'var(--radius)',
+              fontSize: '13px', color: 'var(--gray-700)',
+              textDecoration: 'none', fontWeight: 500,
+            }}>
+              ? Help center
             </Link>
             <div style={{ borderTop: '1px solid var(--border-light)', marginTop: '4px', paddingTop: '4px' }}>
               <button onClick={handleLogout} style={{
@@ -153,18 +350,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 background: active ? 'var(--primary-light)' : 'transparent',
                 transition: 'all 0.15s',
               }}>
-                <span style={{
-                  fontSize: '15px', width: '22px', textAlign: 'center',
-                  color: active ? 'var(--primary)' : 'var(--gray-400)',
-                }}>
+                <span style={{ fontSize: '15px', width: '22px', textAlign: 'center', color: active ? 'var(--primary)' : 'var(--gray-400)' }}>
                   {item.icon}
                 </span>
-                <div>
-                  <p style={{ fontSize: '13px', fontWeight: active ? 700 : 500, color: active ? 'var(--primary)' : 'var(--gray-700)', margin: 0, lineHeight: 1.3 }}>
-                    {item.label}
-                  </p>
-                </div>
-                {active && <div style={{ marginLeft: 'auto', width: '4px', height: '4px', borderRadius: '50%', background: 'var(--primary)' }}/>}
+                <p style={{ fontSize: '13px', fontWeight: active ? 700 : 500, color: active ? 'var(--primary)' : 'var(--gray-700)', margin: 0, flex: 1 }}>
+                  {item.label}
+                </p>
+                {active && <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--primary)', flexShrink: 0 }}/>}
               </Link>
             )
           })}
@@ -221,7 +413,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--gray-900)', letterSpacing: '-0.3px' }}>ConsultFlow</span>
           </div>
         </div>
-        <ProfileMenu />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <NotificationBell />
+          <ProfileMenu />
+        </div>
       </nav>
 
       {/* Mobile Drawer */}
@@ -232,7 +427,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div style={{
             position: 'absolute', top: 0, left: 0, bottom: 0,
             width: '260px', background: 'white', padding: '20px 10px',
-            boxShadow: 'var(--shadow-lg)', animation: 'slideIn 0.2s ease',
+            boxShadow: 'var(--shadow-lg)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', paddingLeft: '8px' }}>
               <div style={{ width: '32px', height: '32px', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -286,6 +481,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )
         })}
       </nav>
+
+      {/* Also show notification bell in desktop sidebar top right */}
+      <div className="cf-sidebar" style={{
+        position: 'fixed', top: '14px', right: '24px', zIndex: 50,
+      }}>
+        <NotificationBell />
+      </div>
 
       {/* Main content */}
       <main className="cf-main">
