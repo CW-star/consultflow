@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState('company')
+  const [selectedMethod, setSelectedMethod] = useState<string | null>(null)
   const [form, setForm] = useState({
     company_name: '',
     company_email: '',
@@ -20,6 +21,12 @@ export default function SettingsPage() {
     payment_terms: 'Payment due within 14 days of invoice date.',
     monthly_target: '2000',
     automation_enabled: true,
+    etransfer_email: '',
+    etransfer_name: '',
+    bank_name: '',
+    bank_account: '',
+    bank_transit: '',
+    paypal_email: '',
   })
 
   useEffect(() => {
@@ -28,7 +35,8 @@ export default function SettingsPage() {
       if (!user) return
       const { data } = await supabase.from('settings').select('*').eq('user_id', user.id).single()
       if (data) {
-        setForm({
+        setForm(f => ({
+          ...f,
           company_name: data.company_name || '',
           company_email: data.company_email || '',
           company_phone: data.company_phone || '',
@@ -36,7 +44,7 @@ export default function SettingsPage() {
           payment_terms: data.payment_terms || 'Payment due within 14 days of invoice date.',
           monthly_target: String(data.monthly_target || 2000),
           automation_enabled: data.automation_enabled ?? true,
-        })
+        }))
       }
       setLoading(false)
     }
@@ -81,6 +89,124 @@ export default function SettingsPage() {
     { key: 'billing', label: '💳 Billing & Targets' },
     { key: 'automation', label: '⚡ Automation' },
     { key: 'account', label: '👤 Account' },
+  ]
+
+  const paymentMethods = [
+    {
+      id: 'stripe',
+      icon: '⚡',
+      name: 'Stripe',
+      desc: 'Card, Apple Pay, Google Pay',
+      status: 'active',
+      color: '#6772e5',
+      bg: '#ede9fe',
+      instructions: [
+        'Stripe is already connected and working in test mode.',
+        'Clients see a purple "Pay with Stripe" button on their invoice.',
+        'They can pay by Visa, Mastercard, Apple Pay or Google Pay.',
+        'To go live: visit dashboard.stripe.com → Activate your account → replace test keys with live keys in Settings.',
+      ],
+      fields: null,
+    },
+    {
+      id: 'etransfer',
+      icon: '📱',
+      name: 'E-Transfer',
+      desc: 'Interac e-Transfer',
+      status: 'manual',
+      color: 'var(--success)',
+      bg: 'var(--success-light)',
+      instructions: [
+        'Add your e-Transfer email below.',
+        'This will appear on your invoices so clients know where to send payment.',
+        'Record payments manually using the "Record payment" button on any invoice.',
+      ],
+      fields: [
+        { key: 'etransfer_email', label: 'E-Transfer email', placeholder: 'your@email.com', type: 'email' },
+        { key: 'etransfer_name', label: 'Account name', placeholder: 'Full name on account', type: 'text' },
+      ],
+    },
+    {
+      id: 'bank',
+      icon: '🏦',
+      name: 'Bank Transfer',
+      desc: 'Wire / EFT',
+      status: 'manual',
+      color: 'var(--primary)',
+      bg: 'var(--primary-light)',
+      instructions: [
+        'Add your banking details below.',
+        'These will appear on invoices for clients who prefer wire transfers.',
+        'Record payments manually using the "Record payment" button on any invoice.',
+      ],
+      fields: [
+        { key: 'bank_name', label: 'Bank name', placeholder: 'e.g. TD Bank, RBC', type: 'text' },
+        { key: 'bank_transit', label: 'Transit / routing number', placeholder: 'e.g. 00400-004', type: 'text' },
+        { key: 'bank_account', label: 'Account number (last 4)', placeholder: '••••', type: 'text' },
+      ],
+    },
+    {
+      id: 'paypal',
+      icon: '🅿',
+      name: 'PayPal',
+      desc: 'PayPal balance or card',
+      status: 'manual',
+      color: '#003087',
+      bg: '#dbeafe',
+      instructions: [
+        'Add your PayPal email below.',
+        'Clients can send payment to your PayPal account directly.',
+        'Record payments manually using the "Record payment" button on any invoice.',
+      ],
+      fields: [
+        { key: 'paypal_email', label: 'PayPal email', placeholder: 'paypal@email.com', type: 'email' },
+      ],
+    },
+    {
+      id: 'apple_pay',
+      icon: '🍎',
+      name: 'Apple Pay',
+      desc: 'Via Stripe checkout',
+      status: 'active',
+      color: '#111827',
+      bg: '#f3f4f6',
+      instructions: [
+        'Apple Pay is automatically available when clients pay via Stripe.',
+        'No extra setup needed — it appears on supported devices automatically.',
+        'Clients on iPhone or Mac with Safari will see the Apple Pay option.',
+      ],
+      fields: null,
+    },
+    {
+      id: 'google_pay',
+      icon: 'G',
+      name: 'Google Pay',
+      desc: 'Via Stripe checkout',
+      status: 'active',
+      color: '#1a73e8',
+      bg: '#dbeafe',
+      instructions: [
+        'Google Pay is automatically available when clients pay via Stripe.',
+        'No extra setup needed — it appears on Android and Chrome automatically.',
+        'Clients using Chrome or Android devices will see the Google Pay option.',
+      ],
+      fields: null,
+    },
+    {
+      id: 'cash',
+      icon: '💵',
+      name: 'Cash / Cheque',
+      desc: 'In-person payment',
+      status: 'manual',
+      color: 'var(--gray-500)',
+      bg: 'var(--gray-100)',
+      instructions: [
+        'For in-person cash or cheque payments.',
+        'Record payments manually using the "Record payment" button on any invoice.',
+        'Select "Cash" or "Cheque" as the payment method when recording.',
+      ],
+      fields: null,
+    },
   ]
 
   if (loading) return (
@@ -154,74 +280,110 @@ export default function SettingsPage() {
 
         {/* ── Billing tab ── */}
         {activeTab === 'billing' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div>
               <h2 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px' }}>Billing & targets</h2>
-              <p style={{ fontSize: '13px', color: 'var(--gray-400)', margin: 0 }}>Set your revenue goals and billing defaults</p>
+              <p style={{ fontSize: '13px', color: 'var(--gray-400)', margin: 0 }}>Revenue goals and payment method configuration</p>
             </div>
-            <div>
+
+            {/* Monthly target */}
+            <div style={{ background: 'var(--gray-50)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border)' }}>
               <label style={labelStyle}>Monthly revenue target ($)</label>
               <input type="number" value={form.monthly_target}
                 onChange={e => setForm({ ...form, monthly_target: e.target.value })}
-                placeholder="2000" style={inputStyle}/>
-              <p style={{ fontSize: '12px', color: 'var(--gray-400)', marginTop: '4px' }}>
-                Used for dashboard progress tracking and AI forecasting
+                placeholder="2000" style={{ ...inputStyle, marginBottom: '6px' }}/>
+              <p style={{ fontSize: '12px', color: 'var(--gray-400)', margin: 0 }}>
+                Used for dashboard progress bar, health score, and AI forecasting
               </p>
             </div>
 
-            {/* Stripe status */}
-            <div style={{ background: 'var(--success-light)', borderRadius: '12px', padding: '18px', border: '1px solid #86efac' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                <span style={{ fontSize: '22px' }}>✅</span>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--success)', margin: '0 0 2px' }}>Stripe connected</p>
-                  <p style={{ fontSize: '12px', color: 'var(--success)', opacity: 0.8, margin: 0 }}>Test mode · Ready to accept payments</p>
-                </div>
-              </div>
-              <p style={{ fontSize: '13px', color: 'var(--gray-600)', margin: '0 0 12px' }}>
-                Clients can pay invoices directly by card, Apple Pay, or Google Pay. Look for the purple "Pay with Stripe" button on any unpaid invoice.
+            {/* Payment methods — interactive */}
+            <div>
+              <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--gray-700)', margin: '0 0 10px' }}>
+                Payment methods — click to configure
               </p>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {['💳 Credit & Debit Card', '🍎 Apple Pay', 'G Google Pay'].map(m => (
-                  <span key={m} style={{
-                    padding: '4px 12px', background: 'white',
-                    borderRadius: 'var(--radius-full)', fontSize: '12px',
-                    fontWeight: 600, color: 'var(--gray-600)',
-                    border: '1px solid var(--border)',
-                  }}>
-                    {m}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Payment methods info */}
-            <div style={{ background: 'var(--gray-50)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border)' }}>
-              <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--gray-700)', margin: '0 0 10px' }}>All accepted payment methods</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {[
-                  { icon: '💳', name: 'Stripe', desc: 'Card, Apple Pay, Google Pay — online payments', status: 'Active', color: 'var(--success)' },
-                  { icon: '🏦', name: 'E-Transfer', desc: 'Interac e-Transfer (record manually)', status: 'Manual', color: 'var(--primary)' },
-                  { icon: '🏛', name: 'Bank Transfer', desc: 'Wire transfer / EFT (record manually)', status: 'Manual', color: 'var(--primary)' },
-                  { icon: '🅿', name: 'PayPal', desc: 'PayPal balance or linked card (record manually)', status: 'Manual', color: 'var(--primary)' },
-                  { icon: '💵', name: 'Cash / Cheque', desc: 'In-person payment (record manually)', status: 'Manual', color: 'var(--gray-400)' },
-                ].map(m => (
-                  <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'white', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '18px' }}>{m.icon}</span>
-                      <div>
-                        <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 1px', color: 'var(--gray-900)' }}>{m.name}</p>
-                        <p style={{ fontSize: '11px', color: 'var(--gray-400)', margin: 0 }}>{m.desc}</p>
+                {paymentMethods.map(m => (
+                  <div key={m.id}>
+                    {/* Method row — clickable */}
+                    <button onClick={() => setSelectedMethod(selectedMethod === m.id ? null : m.id)}
+                      style={{
+                        width: '100%', textAlign: 'left', padding: '14px 16px',
+                        background: selectedMethod === m.id ? m.bg : 'var(--gray-50)',
+                        border: `1.5px solid ${selectedMethod === m.id ? m.color + '60' : 'var(--border)'}`,
+                        borderRadius: selectedMethod === m.id ? '12px 12px 0 0' : '12px',
+                        cursor: 'pointer', fontFamily: 'var(--font)',
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        transition: 'all 0.15s',
+                      }}>
+                      <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: selectedMethod === m.id ? 'white' : m.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0, fontWeight: 800, color: m.color }}>
+                        {m.icon}
                       </div>
-                    </div>
-                    <span style={{
-                      fontSize: '11px', fontWeight: 700,
-                      padding: '3px 10px', borderRadius: 'var(--radius-full)',
-                      background: m.status === 'Active' ? 'var(--success-light)' : 'var(--gray-100)',
-                      color: m.status === 'Active' ? 'var(--success)' : 'var(--gray-500)',
-                    }}>
-                      {m.status}
-                    </span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 2px', color: 'var(--gray-900)' }}>{m.name}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--gray-400)', margin: 0 }}>{m.desc}</p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          fontSize: '11px', fontWeight: 700, padding: '3px 10px',
+                          borderRadius: 'var(--radius-full)',
+                          background: m.status === 'active' ? 'var(--success-light)' : 'var(--gray-100)',
+                          color: m.status === 'active' ? 'var(--success)' : 'var(--gray-400)',
+                        }}>
+                          {m.status === 'active' ? '● Active' : 'Manual'}
+                        </span>
+                        <span style={{ fontSize: '16px', color: 'var(--gray-300)', transform: selectedMethod === m.id ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', display: 'inline-block' }}>›</span>
+                      </div>
+                    </button>
+
+                    {/* Expanded panel */}
+                    {selectedMethod === m.id && (
+                      <div style={{ background: m.bg, border: `1.5px solid ${m.color}60`, borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '16px 18px' }}>
+
+                        {/* Instructions */}
+                        <div style={{ marginBottom: m.fields ? '16px' : '0' }}>
+                          <p style={{ fontSize: '11px', fontWeight: 700, color: m.color, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>How it works</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {m.instructions.map((inst, i) => (
+                              <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: m.color, color: 'white', fontSize: '10px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '1px' }}>{i + 1}</span>
+                                <p style={{ fontSize: '13px', color: 'var(--gray-700)', margin: 0, lineHeight: 1.5 }}>{inst}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Editable fields */}
+                        {m.fields && (
+                          <div style={{ background: 'white', borderRadius: '10px', padding: '14px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray-600)', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your details</p>
+                            {m.fields.map(field => (
+                              <div key={field.key}>
+                                <label style={labelStyle}>{field.label}</label>
+                                <input
+                                  type={field.type}
+                                  value={form[field.key as keyof typeof form] as string}
+                                  onChange={e => setForm({ ...form, [field.key]: e.target.value })}
+                                  placeholder={field.placeholder}
+                                  style={inputStyle}
+                                />
+                              </div>
+                            ))}
+                            <p style={{ fontSize: '12px', color: 'var(--gray-400)', margin: 0 }}>
+                              💡 These details will appear on your invoices so clients know how to pay
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Go live button for Stripe */}
+                        {m.id === 'stripe' && (
+                          <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '12px', padding: '9px 18px', background: '#6772e5', color: 'white', borderRadius: 'var(--radius)', fontSize: '13px', fontWeight: 700, textDecoration: 'none' }}>
+                            🚀 Activate live payments →
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -236,8 +398,6 @@ export default function SettingsPage() {
               <h2 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px' }}>Automation settings</h2>
               <p style={{ fontSize: '13px', color: 'var(--gray-400)', margin: 0 }}>Control automated workflows for your practice</p>
             </div>
-
-            {/* Master toggle */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: form.automation_enabled ? 'var(--success-light)' : 'var(--gray-50)', borderRadius: '12px', border: `1px solid ${form.automation_enabled ? '#86efac' : 'var(--border)'}`, transition: 'all 0.2s' }}>
               <div>
                 <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--gray-900)', margin: '0 0 2px' }}>Master automation switch</p>
@@ -259,8 +419,6 @@ export default function SettingsPage() {
                 }}/>
               </button>
             </div>
-
-            {/* Workflow list */}
             {[
               { label: 'Invoice reminders', desc: 'Auto reminders at 3, 7, 14 and 30 days after due date', icon: '🔔', active: true },
               { label: 'Overdue detection', desc: 'Automatically mark invoices overdue after due date passes', icon: '⚠️', active: true },
@@ -268,11 +426,7 @@ export default function SettingsPage() {
               { label: 'Daily invoice send', desc: 'Auto-send new invoices at 8am on business days', icon: '📧', active: false },
               { label: 'Stripe auto-billing', desc: 'Charge saved cards automatically on due date', icon: '💳', active: false },
             ].map(item => (
-              <div key={item.label} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '14px 16px', border: '1px solid var(--border)', borderRadius: '12px',
-                opacity: form.automation_enabled ? 1 : 0.5, transition: 'opacity 0.2s',
-              }}>
+              <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: '1px solid var(--border)', borderRadius: '12px', opacity: form.automation_enabled ? 1 : 0.5, transition: 'opacity 0.2s' }}>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <span style={{ fontSize: '20px' }}>{item.icon}</span>
                   <div>
@@ -281,12 +435,9 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <span style={{
-                  fontSize: '11px', fontWeight: 700, padding: '3px 10px',
-                  borderRadius: 'var(--radius-full)', whiteSpace: 'nowrap',
-                  background: !form.automation_enabled ? 'var(--gray-100)' :
-                    item.active ? 'var(--success-light)' : 'var(--gray-100)',
-                  color: !form.automation_enabled ? 'var(--gray-400)' :
-                    item.active ? 'var(--success)' : 'var(--gray-400)',
+                  fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: 'var(--radius-full)', whiteSpace: 'nowrap',
+                  background: !form.automation_enabled ? 'var(--gray-100)' : item.active ? 'var(--success-light)' : 'var(--gray-100)',
+                  color: !form.automation_enabled ? 'var(--gray-400)' : item.active ? 'var(--success)' : 'var(--gray-400)',
                 }}>
                   {!form.automation_enabled ? 'Paused' : item.active ? '● Active' : 'Coming soon'}
                 </span>
@@ -302,8 +453,6 @@ export default function SettingsPage() {
               <h2 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px' }}>Account settings</h2>
               <p style={{ fontSize: '13px', color: 'var(--gray-400)', margin: 0 }}>Manage your login and security</p>
             </div>
-
-            {/* Profile card */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', background: 'var(--primary-light)', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
               <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <span style={{ color: 'white', fontSize: '16px', fontWeight: 800 }}>CW</span>
@@ -313,7 +462,6 @@ export default function SettingsPage() {
                 <p style={{ fontSize: '13px', color: 'var(--primary)', margin: 0, fontWeight: 500 }}>Consultant · Ada Analytics Consulting</p>
               </div>
             </div>
-
             <div style={{ background: 'var(--gray-50)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border)' }}>
               <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 10px', color: 'var(--gray-700)' }}>Change email</p>
               <input type="email" placeholder="New email address" style={{ ...inputStyle, marginBottom: '8px' }}/>
@@ -321,7 +469,6 @@ export default function SettingsPage() {
                 Update email
               </button>
             </div>
-
             <div style={{ background: 'var(--gray-50)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border)' }}>
               <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 10px', color: 'var(--gray-700)' }}>Change password</p>
               <input type="password" placeholder="New password" style={{ ...inputStyle, marginBottom: '8px' }}/>
@@ -329,7 +476,6 @@ export default function SettingsPage() {
                 Update password
               </button>
             </div>
-
             <div style={{ background: 'var(--danger-light)', borderRadius: '12px', padding: '16px', border: '1px solid #fca5a5' }}>
               <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--danger)', margin: '0 0 4px' }}>⚠ Danger zone</p>
               <p style={{ fontSize: '12px', color: 'var(--danger)', margin: '0 0 12px', opacity: 0.8 }}>These actions cannot be undone</p>
