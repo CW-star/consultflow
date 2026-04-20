@@ -1,44 +1,28 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  const { pathname } = request.nextUrl
 
-  const cookiesToSet: Array<{ name: string; value: string; options: any }> = []
+  // Public routes — no auth needed
+  const isPublic =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/onboarding') ||
+    pathname.startsWith('/_next') ||
+    pathname.includes('favicon')
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookiesToSet.push({ name, value, options })
-          supabaseResponse.cookies.set(name, value, options)
-        },
-      },
-    }
-  )
+  if (isPublic) return NextResponse.next()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Check for Supabase session cookie
+  const hasSession =
+    request.cookies.get('sb-ctudpjtlngbymimlecje-auth-token') ||
+    request.cookies.getAll().some(c => c.name.includes('sb-') && c.name.includes('-auth-token'))
 
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login')
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api')
-  const isOnboarding = request.nextUrl.pathname.startsWith('/onboarding')
-  const isPublic = isAuthPage || isApiRoute || isOnboarding
-
-  if (!user && !isPublic) {
-    const loginUrl = new URL('/login', request.url)
-    return NextResponse.redirect(loginUrl)
+  if (!hasSession) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && isAuthPage) {
-    return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  return supabaseResponse
+  return NextResponse.next()
 }
 
 export const config = {
