@@ -85,7 +85,19 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             <span style={{ background: riskBg, color: riskColor, padding: '6px 14px', borderRadius: 'var(--radius-full)', fontSize: '13px', fontWeight: 700 }}>
               {riskLabel} · {riskScore}
             </span>
-            <Link href="/sessions/new" style={{ padding: '9px 18px', background: 'var(--primary)', color: 'white', borderRadius: 'var(--radius)', fontSize: '13px', fontWeight: 700, textDecoration: 'none' }}>
+            <a href={`/api/clients/${id}/statement`} target="_blank" style={{
+              padding: '9px 16px', background: 'white', color: 'var(--gray-600)',
+              border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+              fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+            }}>
+              📄 Statement
+            </a>
+            <Link href="/sessions/new" style={{
+              padding: '9px 18px', background: 'var(--primary)', color: 'white',
+              borderRadius: 'var(--radius)', fontSize: '13px', fontWeight: 700,
+              textDecoration: 'none',
+            }}>
               + Log session
             </Link>
           </div>
