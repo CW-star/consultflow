@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import OnboardingSettings from './OnboardingSettings'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -111,7 +112,9 @@ export default function SettingsPage() {
     setRunningReminders(false)
   }
 
-  function Toggle({ value, onChange, disabled = false }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  function Toggle({ value, onChange, disabled = false }: {
+    value: boolean; onChange: (v: boolean) => void; disabled?: boolean
+  }) {
     return (
       <button onClick={() => !disabled && onChange(!value)} style={{
         width: '46px', height: '26px', borderRadius: 'var(--radius-full)',
@@ -433,7 +436,6 @@ export default function SettingsPage() {
                   </div>
                   <Toggle value={form.automation_reminders} onChange={v => setForm({ ...form, automation_reminders: v })} disabled={!form.automation_enabled}/>
                 </div>
-                {/* Reminder day sub-toggles */}
                 {form.automation_reminders && form.automation_enabled && (
                   <div style={{ padding: '12px 16px', background: 'white', borderTop: '1px solid var(--border-light)', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '8px' }}>
                     {[
@@ -479,7 +481,7 @@ export default function SettingsPage() {
               ))}
             </div>
 
-            {/* Automation status summary */}
+            {/* Status summary */}
             <div style={{ background: 'var(--gray-50)', borderRadius: '12px', padding: '14px 16px', border: '1px solid var(--border)' }}>
               <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray-600)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 10px' }}>Current status</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -508,6 +510,8 @@ export default function SettingsPage() {
               <h2 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px' }}>Account settings</h2>
               <p style={{ fontSize: '13px', color: 'var(--gray-400)', margin: 0 }}>Manage your login and security</p>
             </div>
+
+            {/* Profile card */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', background: 'var(--primary-light)', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
               <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <span style={{ color: 'white', fontSize: '16px', fontWeight: 800 }}>CW</span>
@@ -517,6 +521,8 @@ export default function SettingsPage() {
                 <p style={{ fontSize: '13px', color: 'var(--primary)', margin: 0, fontWeight: 500 }}>Consultant · Ada Analytics Consulting</p>
               </div>
             </div>
+
+            {/* Change email */}
             <div style={{ background: 'var(--gray-50)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border)' }}>
               <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 10px', color: 'var(--gray-700)' }}>Change email</p>
               <input type="email" placeholder="New email address" style={{ ...inputStyle, marginBottom: '8px' }}/>
@@ -524,6 +530,8 @@ export default function SettingsPage() {
                 Update email
               </button>
             </div>
+
+            {/* Change password */}
             <div style={{ background: 'var(--gray-50)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border)' }}>
               <p style={{ fontSize: '13px', fontWeight: 700, margin: '0 0 10px', color: 'var(--gray-700)' }}>Change password</p>
               <input type="password" placeholder="New password" style={{ ...inputStyle, marginBottom: '8px' }}/>
@@ -531,6 +539,8 @@ export default function SettingsPage() {
                 Update password
               </button>
             </div>
+
+            {/* Danger zone */}
             <div style={{ background: 'var(--danger-light)', borderRadius: '12px', padding: '16px', border: '1px solid #fca5a5' }}>
               <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--danger)', margin: '0 0 4px' }}>⚠ Danger zone</p>
               <p style={{ fontSize: '12px', color: 'var(--danger)', margin: '0 0 12px', opacity: 0.8 }}>These actions cannot be undone</p>
@@ -560,6 +570,10 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Onboarding link — shown below the main card on account tab */}
+      {activeTab === 'account' && <OnboardingSettings />}
+
     </div>
   )
 }
